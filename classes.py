@@ -1,4 +1,4 @@
-from tools import ANNONCES, POINTS_CONTRAT
+from tools import ANNONCES, POINTS_CONTRAT, calcul_score_tarot
 from os import listdir
 import numpy as np
 
@@ -70,8 +70,8 @@ class Card:
 
 class Hand:
     def __init__(self):
-        self.cards = []
-    
+        self.cards =  []
+
     def add_card(self, joueur, Carte):
         if self.valid(joueur, Carte):
             self.cards.append(Carte)
@@ -87,6 +87,8 @@ class Hand:
                 if highest_atout_player.valeur > highest_atout_hand.valeur and Carte.valeur < highest_atout_hand.valeur:
                     if printing:
                         print(f"You must play a higher Tarot card than {highest_atout_player} if you have one.")
+                        print(self.cards)
+                        print(joueur.cards)
                     return False
                 
         if not self.cards:
@@ -100,6 +102,7 @@ class Hand:
             if c.color == hand_color:
                 if printing:
                     print(f"You must play a card of the same color ({hand_color}) if you have one.")
+                    print(f"Your cards: {joueur.cards}")
                 return False # different color and he has the color asked
         if Carte.color == 'Tarot':
             return True # cutting with a Tarot card is allowed
@@ -137,7 +140,8 @@ class Round:
         self.taker = None
         self.hand = None
         self.color_called = None
-        self.poignee = None
+        self.petit_au_bout = None
+        self.poignee = {'simple': 0, 'double': 0, 'triple': 0}
         self.chelem = False
 
         self.deck = deck
@@ -167,8 +171,9 @@ class Round:
             self.player_turn += 1
 
         if self.annonce == 'Garde contre' or (self.player_turn == self.nb_players and self.annonce is not None):
-            print(f"\nAnnouncement complete: {self.annonce} by {self.taker.name}")
-
+            # print(f"\nAnnouncement complete: {self.annonce} by {self.taker.name}")
+            
+            self.deck.new_deck = []
             self.next_state()
 
         elif self.player_turn == self.nb_players:
@@ -325,7 +330,7 @@ class Round:
                         print(f"{Carte.nom} is not in your hand.")
                     return False
 
-            self.ecart = cartes
+            self.ecart = list(cartes)
             for Carte in cartes:
                 self.remove_card(joueur, Carte)
             
@@ -333,7 +338,7 @@ class Round:
             # print(f'le joueur {joueur.name} possède bien 15 cartes : {len(joueur.cards)}')
             return True
         
-    def play_hand(self, joueur: Player, Carte: Card, printing=True):
+    def play_hand(self, joueur: Player, Carte: Card, printing=True, just_scores=False):
         def aux_play():
             self.hand.add_card(joueur, Carte)
             self.remove_card(joueur, Carte)
@@ -349,20 +354,21 @@ class Round:
                     return False
             if self.hand is None or len(self.hand.cards) == self.nb_players: #new hand
                 self.hand = Hand()
-                print(f"\nNew hand started by {joueur.name}.")
+                if not just_scores:
+                    print(f"\nNew hand started by {joueur.name}.")
                 aux_play()
                 return True
             if not self.hand.valid(joueur, Carte, printing=printing):
                 return False
             if len(self.hand.cards) == self.nb_players - 1: # last card of the hand
                 aux_play()
-                self.compute_points_and_more()
+                self.compute_points_and_more(just_scores)
                 return True
             else:
                 aux_play()
                 return True
 
-    def compute_points_and_more(self): # after a hand
+    def compute_points_and_more(self, just_scores=False): # after a hand
         def get_joueur_gagnant():
             if self.players[0].cards == [] and self.chelem and self.player_turn == self.players.index(self.taker) and self.hand.cards[0].valeur == 0:
                 return self.taker
@@ -383,16 +389,23 @@ class Round:
         if not len(self.hand.cards)== self.nb_players :
             print("Not enough cards played in this hand.")
             return False
-        if self.players[0].cards == [] : # end of the game
-            self.next_state()
+        
         joueur_gagnant = get_joueur_gagnant()
-        print(f"Hand cards: {self.hand.cards}")
-        print(f"Player {joueur_gagnant.name} wins the hand.\n")
+        
+        if self.players[0].cards == []:  # end of the game
+            if any(c.color == 'Tarot' and c.valeur == 1 for c in self.hand.cards): # petit au bout
+                self.petit_au_bout = self.team[joueur_gagnant]
+            self.next_state()
+        if not just_scores:
+            print(f"Hand cards: {self.hand.cards}")
+            print(f"Player {joueur_gagnant.name} wins the hand.\n")
 
         if any(c.color == 'Tarot' and c.valeur == 0 for c in self.hand.cards) and (self.players[0].cards != [] or self.chelem) :
             excuse_player_index = next(i for i, c in enumerate(self.hand.cards) if c.color == 'Tarot' and c.valeur == 0)
             excuse_player = self.players[(excuse_player_index + self.player_turn) % self.nb_players]
             if self.team[joueur_gagnant] != self.team[excuse_player]:
+                print("le joueur qui a joué l'excuse n'est pas dans la même équipe que le joueur gagnant")
+                print("il donne une carte à l'équipe adverse pour récupérer l'excuse")
                 self.points[self.team[excuse_player]] += 4
                 self.bouts[self.team[excuse_player]] += 1
                 self.bouts[self.other_team(self.team[excuse_player])] -= 1
@@ -411,6 +424,7 @@ class Round:
         self.deck.add_hand(self.hand) # Add the hand to the deck of the next round
 
     def end_round(self):
+        self.deck.new_deck += self.ecart
         p = sum(c.nb_points for c in self.ecart)
         if self.annonce == 'Garde contre':
             self.points['defense'] += p
@@ -418,12 +432,16 @@ class Round:
             self.points['attack'] += p
         assert self.points['attack'] + self.points['defense'] == 91, f"Total points should equal 91 here we have {self.points['attack']} + {self.points['defense']}"
         assert self.bouts['attack'] + self.bouts['defense'] == 3, f"Total bouts should equal 3 here we have {self.bouts['attack']} + {self.bouts['defense']}"
-        print(f"\nRound ended. Attack points: {self.points['attack']}")
-        print(f"Attack Bouts: {self.bouts['attack']}")
-        if self.points['attack'] >= POINTS_CONTRAT[self.bouts['attack']]:
-            print(f"Attack wins")
-        else:
-            print(f"Defense wins")
+        
+        score = calcul_score_tarot(self.points['attack'], self.bouts['attack'], petit_au_bout=self.petit_au_bout, poignees=self.poignee, contrat=self.annonce)
+        for joueur in self.defense:
+            joueur.score -= score
+        for joueur in self.attack:
+            if joueur == self.taker:
+                joueur.score += score*(len(self.defense) - (len(self.attack) - 1))  # bonus for the taker
+            else :
+                joueur.score += score
+        print(f"Round ended. Score {score}")
 
 
 
@@ -434,7 +452,7 @@ class Party:
         self.cards = []
         self.get_cards()
         np.random.shuffle(self.cards)
-        print(f"Number of cards: {len(self.cards)}")
+        # print(f"Number of cards: {len(self.cards)}")
         self.deck = Deck(self.cards)
         self.round = None
         self.pos_first_player = -1
