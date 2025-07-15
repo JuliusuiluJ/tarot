@@ -104,15 +104,56 @@ document.addEventListener('DOMContentLoaded', () => {
 	socket.on('reconnected', ({ msg }) => alert(msg));
 
 	// Demandes d'action
-	socket.on('ask_announce', () => {
-		const sel = mkSelect(['Passe','Prise','Garde','Garde sans','Garde contre']);
-		showControls([
-			sel,
-			mkButton("Valider", () => {
-				socket.emit('announce', { player: myName, announce: sel.value });
-				showControls([]); // ← on efface direct après l'envoi
-			})
-		]);
+	socket.on('ask_announce', ({ valid_announces, current_announce }) => {
+		const container = document.createElement('div');
+		container.style.cssText = "display: flex; flex-direction: column; gap: 10px; align-items: center;";
+		
+		// Boutons d'annonce
+		const buttonsContainer = document.createElement('div');
+		buttonsContainer.style.cssText = "display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;";
+		
+		valid_announces.forEach(announce => {
+			const btn = mkButton(announce, () => {
+				const chelem = chelemCheckbox.checked;
+				socket.emit('announce', { 
+					player: myName, 
+					announce: announce,
+					chelem: chelem
+				});
+				showControls([]);
+			});
+			btn.className = 'announce-button';
+			buttonsContainer.appendChild(btn);
+		});
+		
+		// Checkbox pour le chelem
+		const chelemContainer = document.createElement('div');
+		chelemContainer.className = 'chelem-container';
+		
+		const chelemCheckbox = document.createElement('input');
+		chelemCheckbox.type = 'checkbox';
+		chelemCheckbox.id = 'chelem-checkbox';
+		chelemCheckbox.checked = false;
+		
+		const chelemLabel = document.createElement('label');
+		chelemLabel.htmlFor = 'chelem-checkbox';
+		chelemLabel.innerText = 'Annoncer un chelem';
+		
+		chelemContainer.appendChild(chelemCheckbox);
+		chelemContainer.appendChild(chelemLabel);
+		
+		// Affichage de l'annonce courante
+		if (current_announce && current_announce !== 'Passe') {
+			const currentInfo = document.createElement('div');
+			currentInfo.innerText = `Annonce actuelle: ${current_announce}`;
+			currentInfo.style.cssText = "font-weight: bold; margin-bottom: 10px; color: #dc3545;";
+			container.appendChild(currentInfo);
+		}
+		
+		container.appendChild(buttonsContainer);
+		container.appendChild(chelemContainer);
+		
+		showControls(container);
 	});
 
 	socket.on('ask_appel', () => {
@@ -153,7 +194,29 @@ document.addEventListener('DOMContentLoaded', () => {
     	socket.on('update_current_hand', ({ cards }) => {
 		const c = $('current-hand');
 		c.innerHTML = "<h3>Pli en cours</h3>";
+		
+		if (cards.length === 1) {
+			document.querySelectorAll('.card.winning').forEach(card => card.classList.remove('winning'));
+		}
+		
 		cards.forEach(card => c.appendChild(createCard(card)));
+	});
+
+	// Illumination de la carte gagnante
+	socket.on('highlight_winning_card', ({ winning_card }) => {
+		// Retirer l'illumination précédente
+		document.querySelectorAll('.card.winning').forEach(card => card.classList.remove('winning'));
+		
+		// Illuminer la nouvelle carte gagnante
+		const winningCardElement = document.getElementById(winning_card);
+		if (winningCardElement) {
+			winningCardElement.classList.add('winning');
+		}
+	});
+
+	// Nettoyer l'illumination au début d'un nouveau pli
+	socket.on('new_hand_started', () => {
+		document.querySelectorAll('.card.winning').forEach(card => card.classList.remove('winning'));
 	});
 
 	// Erreurs

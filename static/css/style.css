@@ -23,6 +23,18 @@ body {
     border: 3px solid red;
 }
 
+.card.winning {
+    border: 3px solid gold;
+    box-shadow: 0 0 15px gold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
 #controls {
     margin: 20px;
 }
@@ -57,4 +69,48 @@ body {
     width: 100%;
     text-align: center;
     margin-bottom: 10px;
+}
+
+/* Styles pour les boutons d'annonce */
+.announce-button {
+    padding: 10px 15px;
+    margin: 5px;
+    border: 2px solid #007bff;
+    background: #f8f9fa;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+    font-weight: bold;
+}
+
+.announce-button:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.announce-button:active {
+    transform: translateY(0);
+}
+
+.chelem-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 10px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 5px;
+}
+
+.chelem-container input[type="checkbox"] {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+.chelem-container label {
+    cursor: pointer;
+    font-weight: bold;
+    color: #856404;
 }

@@ -77,6 +77,7 @@ class Hand:
     def __init__(self):
         self.cards =  []
         self.winner = None
+        self.winning_card = None
 
     def add_card(self, joueur, Carte):
         if self.valid(joueur, Carte):
@@ -104,6 +105,8 @@ class Hand:
         hand_color = self.cards[0].color
         if Carte.color == hand_color:
             return True  # same color
+        if Carte.color == 'Tarot' and Carte.valeur == 0: # Fool can be played anytime
+            return True
         for c in joueur.cards:
             if c.color == hand_color:
                 if printing:
@@ -405,6 +408,7 @@ class Round:
         def get_joueur_gagnant():
             if self.players[0].cards == [] and self.chelem and self.player_turn == self.players.index(self.taker) and self.hand.cards[0].valeur == 0:
                 self.hand.winner = self.taker
+                return 0
 
             color_hand = self.hand.cards[0].color
             atouts = [c for c in self.hand.cards if c.color == 'Tarot' and c.valeur != 0]
@@ -418,12 +422,17 @@ class Round:
                 max_color_card = max(color_cards, key=lambda c: c.valeur)
                 joueur_gagnant = self.hand.cards.index(max_color_card)
             self.hand.winner = self.players[(joueur_gagnant + self.player_turn) % self.nb_players]
+            return joueur_gagnant
 
         if not len(self.hand.cards)== self.nb_players :
             print("Not enough cards played in this hand.")
             return False
         
-        get_joueur_gagnant()
+        winning_card_index = get_joueur_gagnant()
+        
+        # Stocker la carte gagnante
+        if winning_card_index is not None and winning_card_index < len(self.hand.cards):
+            self.hand.winning_card = self.hand.cards[winning_card_index]
         
         if self.players[0].cards == []:  # end of the game
             if any(c.color == 'Tarot' and c.valeur == 1 for c in self.hand.cards): # petit au bout

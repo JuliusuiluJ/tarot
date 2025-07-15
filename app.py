@@ -1,3 +1,4 @@
+from tools import ANNONCES
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 from classes import Player, Card, Party
@@ -56,7 +57,13 @@ def restore_player_state(player):
             current = party.round.players[party.round.player_turn]
             if current == player:
                 if party.round.state == 0:
-                    emit_to_player(player, 'ask_announce')
+                    current_announce = party.round.annonce or 'Passe'
+                    current_index = ANNONCES.index(current_announce)
+                    valid_announces = ANNONCES[current_index + 1:] + ['Passe']
+                    emit_to_player(player, 'ask_announce', {
+                        'valid_announces': valid_announces,
+                        'current_announce': current_announce
+                    })
                 elif party.round.state == 1:
                     emit_to_player(player, 'ask_appel')
                 elif party.round.state == 2:
@@ -68,7 +75,13 @@ def restore_player_state(player):
 
 def ask_announce_current():
     current = party.round.players[party.round.player_turn]
-    emit_to_player(current, 'ask_announce')
+    current_announce = party.round.annonce or 'Passe'
+    current_index = ANNONCES.index(current_announce)
+    valid_announces = ANNONCES[current_index + 1:] + ['Passe']
+    emit_to_player(current, 'ask_announce', {
+        'valid_announces': valid_announces,
+        'current_announce': current_announce
+    })
 
 def handle_redistribution():
     party.round.redistributed = False
@@ -81,7 +94,12 @@ def handle_redistribution():
 
 def proceed_after_announce(player, announce):
     party.round.announce(announce, player)
-    broadcast('status', f"{player.name} annonce {announce}")
+    message = f"{player.name} annonce {announce}"
+    if hasattr(party.round, 'chelem') and party.round.chelem and announce != 'Passe':
+        message += " (avec chelem)"
+    
+    broadcast('status', message)
+    
     if getattr(party.round, 'redistributed', False):
         handle_redistribution()
     if party.round.state == 0:
@@ -139,7 +157,14 @@ def on_start_game(data):
 def on_announce(data):
     player = get_player(data['player'])
     if player:
-        proceed_after_announce(player, data['announce'])
+        announce = data['announce']
+        chelem = data.get('chelem', False)
+        
+        # Mettre à jour le chelem si nécessaire
+        if chelem:
+            party.round.chelem = True
+            
+        proceed_after_announce(player, announce)
 
 @socketio.on('appel')
 def on_appel(data):
@@ -183,12 +208,26 @@ def on_play_card(data):
         broadcast('update_current_hand', {'cards': [c.nom for c in party.round.hand.cards]})
         send_update_hand(player)
         broadcast('status', f"{player.name} joue {data['card']}")
-        if getattr(party.round.hand, 'winner', None):
-            broadcast('hand_winner', {'player': party.round.hand.winner.name})
-        if party.round.state == 4:
-            party.round.end_round()
-            scores = {p.name: p.score for p in players}
-            broadcast('game_end', scores)
+        
+        # Vérifier si le pli est terminé (tous les joueurs ont joué)
+        if len(party.round.hand.cards) == len(party.round.players):
+            # Envoyer l'information sur la carte gagnante
+            if hasattr(party.round.hand, 'winning_card') and party.round.hand.winning_card:
+                broadcast('highlight_winning_card', {
+                    'winning_card': party.round.hand.winning_card.nom
+                })
+            
+            # Envoyer le gagnant du pli
+            if getattr(party.round.hand, 'winner', None):
+                broadcast('hand_winner', {'player': party.round.hand.winner.name})
+            
+            # Vérifier si la partie est terminée
+            if party.round.state == 4:
+                party.round.end_round()
+                scores = {p.name: p.score for p in players}
+                broadcast('game_end', scores)
+            else:
+                ask_play_current()
         else:
             ask_play_current()
 
