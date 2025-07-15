@@ -505,11 +505,13 @@ class Party:
 
     def create_Round(self, nb_player):
         if len(self.players) - len(self.pos_dead_players) != nb_player:
-            self.pos_dead_players = np.random.choice(self.players, size = len(self.players) - nb_player, replace=False)
+            self.pos_dead_players = np.random.choice(range(len(self.players)), size = len(self.players) - nb_player, replace=False)
 
         self.pos_first_player = (self.pos_first_player + 1)% nb_player
         for i in range(len(self.pos_dead_players)):
-            self.pos_dead_players[i]+=1
+            self.pos_dead_players[i] = (self.pos_dead_players[i] + 1) % len(self.players)
+
+        print(self.pos_dead_players )
 
         round_players = [self.players[i] for i in range(len(self.players)) if i not in self.pos_dead_players]
         round_players = round_players[self.pos_first_player:] + round_players[:self.pos_first_player]
