@@ -1,6 +1,11 @@
 from tools import ANNONCES, POINTS_CONTRAT, calcul_score_tarot
 from os import listdir
 import numpy as np
+import logging
+
+# Configuration du logging pour le débogage
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class Player:
     def __init__(self, name):
@@ -71,6 +76,7 @@ class Card:
 class Hand:
     def __init__(self):
         self.cards =  []
+        self.winner = None
 
     def add_card(self, joueur, Carte):
         if self.valid(joueur, Carte):
@@ -151,6 +157,7 @@ class Round:
 
         self.state = 0 # 0: annonce, 1: appel 2: ecart fait, 3 : jeu
         self.player_turn = 0
+        self.redistributed = False  # Indicateur de redistribution
         
         self.attack = []
         self.defense = []
@@ -160,8 +167,6 @@ class Round:
         self.bouts = {'attack': 0, 'defense': 0}
 
         self.distribute()
-        for p in self.players:
-            p.sort_cards()
 
     def announce(self, annonce, joueur: Player):
         if self.players.index(joueur) == self.player_turn:
@@ -174,6 +179,14 @@ class Round:
             # print(f"\nAnnouncement complete: {self.annonce} by {self.taker.name}")
             
             self.deck.new_deck = []
+            for p in self.players:
+                if p != self.taker:
+                    self.defense.append(p)
+                else:
+                    self.attack.append(p)
+            self.team = {p: 'defense' for p in self.defense}
+            self.team[self.taker] = 'attack'
+
             self.next_state()
 
         elif self.player_turn == self.nb_players:
@@ -195,6 +208,8 @@ class Round:
         for joueur in self.players:
             self.deck.new_deck += joueur.cards
         self.deck.new_deck += self.chien
+        for p in self.players:
+            p.sort_cards()
 
     def redistribute(self):
         print("Redistributing cards...")
@@ -203,6 +218,7 @@ class Round:
         self.chien = []
         self.deck.draw_deck()
         self.player_turn = 0
+        self.redistributed = True  # Marquer qu'on vient de redistribuer
         self.distribute()
 
     def next_state(self):
@@ -219,10 +235,10 @@ class Round:
         elif self.annonce in ('Prise', 'Garde'):
             self.state = 2 # direct chien
             print(f"\nle chien est {self.chien}")
+            self.player_turn = self.players.index(self.taker)
             for Carte in self.chien:
                 self.players[self.player_turn].cards.append(Carte)
             self.players[self.player_turn].sort_cards()
-            self.player_turn = self.players.index(self.taker)
         elif self.annonce in ('Garde sans', 'Garde contre'):
             self.state = 3
             self.ecart = self.chien
@@ -273,12 +289,10 @@ class Round:
             print(f"{joueur.name} a appelé {Carte.nom}")
             self.color_called = called_color
             for p in self.players:
-                if p == self.taker or p == self.who_has_the_card(Carte):
+                if p == self.who_has_the_card(Carte) and p != self.taker:
                     self.attack.append(p)
                     self.team[p] = 'attack'
-                else:
-                    self.defense.append(p)
-                    self.team[p] = 'defense'
+                    self.defense.remove(p)
             print(f"\nAttackers: {[p.name for p in self.attack]}")
             print(f"Defenders: {[p.name for p in self.defense]}")
 
@@ -287,38 +301,50 @@ class Round:
     def do_ecart(self, joueur: Player, cartes: list, printing=True):
 
         if self.state == 2 and self.players.index(joueur) == self.player_turn:  # bon joueur au bon état de la partie
+            invalid_cards = []
+            error_messages = []
+            
             if len(cartes) != len(self.chien):
+                error_msg = f"Vous devez sélectionner exactement {len(self.chien)} cartes pour l'écart."
                 if printing:
-                    print(f"You must select exactly {len(self.chien)} cards for the discard.")
-                return False
+                    print(error_msg)
+                return False, [], [error_msg]
 
             non_tarot_non_king_cards = [c for c in joueur.cards if c.color != 'Tarot' and c.valeur != 14]
             
             tarot_cards_in_ecart = [c for c in cartes if c.color == 'Tarot']
-            king_cards_in_ecart = [c for c in cartes if c.valeur == 14]
+            king_cards_in_ecart = [c for c in cartes if c.valeur == 14 and c.color != 'Tarot']
 
             if king_cards_in_ecart:
+                error_msg = f"Vous ne pouvez pas écarter les Rois : {[c.nom for c in king_cards_in_ecart]}"
                 if printing:
-                    print(f"You cannot discard Kings: {[c.nom for c in king_cards_in_ecart]}")
-                return False
+                    print(error_msg)
+                error_messages.append(error_msg)
+                invalid_cards.extend(king_cards_in_ecart)
             
             # Vérifier qu'on ne met pas d'atouts si on a assez d'autres cartes
             if tarot_cards_in_ecart and (len(tarot_cards_in_ecart) + len(non_tarot_non_king_cards) > len(self.chien)):
+                error_msg = f"Vous ne pouvez pas écarter des atouts quand vous avez assez d'autres cartes disponibles. Vous avez {len(non_tarot_non_king_cards)} cartes non-Tarot/non-Roi et devez écarter {len(self.chien)} cartes."
                 if printing:
-                    print("You cannot discard Tarot cards when you have enough other cards available.")
-                    print(f"You have {len(non_tarot_non_king_cards)} non-Tarot/non-King cards and need to discard {len(self.chien)} cards.")
-                return False
+                    print(error_msg)
+                error_messages.append(error_msg)
+                invalid_cards.extend(tarot_cards_in_ecart)
 
             seen = set()
             for Carte in cartes:
                 if Carte.color == 'Tarot' and (Carte.valeur == 0 or Carte.valeur == 1 or Carte.valeur == 21):
+                    error_msg = "Vous ne pouvez pas écarter les 'bouts' (Excuse, Petit, 21 d'atout)"
                     if printing:
-                        print("You cannot discard 'bouts'")
-                    return False
+                        print(error_msg)
+                    if error_msg not in error_messages:
+                        error_messages.append(error_msg)
+                    invalid_cards.append(Carte)
                 if (Carte.color, Carte.valeur) in seen:
+                    error_msg = f"{Carte.nom} a déjà été sélectionné."
                     if printing:
-                        print(f"{Carte.nom} has already been selected.")
-                    return False
+                        print(error_msg)
+                    error_messages.append(error_msg)
+                    invalid_cards.append(Carte)
                 seen.add((Carte.color, Carte.valeur))
                 Found = False
                 for player_card in joueur.cards:
@@ -326,9 +352,14 @@ class Round:
                         Found = True
                         break
                 if not Found:
+                    error_msg = f"{Carte.nom} n'est pas dans votre main."
                     if printing:
-                        print(f"{Carte.nom} is not in your hand.")
-                    return False
+                        print(error_msg)
+                    error_messages.append(error_msg)
+                    invalid_cards.append(Carte)
+
+            if invalid_cards:
+                return False, invalid_cards, error_messages
 
             self.ecart = list(cartes)
             for Carte in cartes:
@@ -336,7 +367,9 @@ class Round:
             
             self.next_state()
             # print(f'le joueur {joueur.name} possède bien 15 cartes : {len(joueur.cards)}')
-            return True
+            return True, [], []
+        else:
+            return False, [], []
         
     def play_hand(self, joueur: Player, Carte: Card, printing=True, just_scores=False):
         def aux_play():
@@ -371,7 +404,7 @@ class Round:
     def compute_points_and_more(self, just_scores=False): # after a hand
         def get_joueur_gagnant():
             if self.players[0].cards == [] and self.chelem and self.player_turn == self.players.index(self.taker) and self.hand.cards[0].valeur == 0:
-                return self.taker
+                self.hand.winner = self.taker
 
             color_hand = self.hand.cards[0].color
             atouts = [c for c in self.hand.cards if c.color == 'Tarot' and c.valeur != 0]
@@ -384,26 +417,26 @@ class Round:
                 color_cards = [c for c in self.hand.cards if c.color == color_hand]
                 max_color_card = max(color_cards, key=lambda c: c.valeur)
                 joueur_gagnant = self.hand.cards.index(max_color_card)
-            return self.players[(joueur_gagnant + self.player_turn) % self.nb_players]
+            self.hand.winner = self.players[(joueur_gagnant + self.player_turn) % self.nb_players]
 
         if not len(self.hand.cards)== self.nb_players :
             print("Not enough cards played in this hand.")
             return False
         
-        joueur_gagnant = get_joueur_gagnant()
+        get_joueur_gagnant()
         
         if self.players[0].cards == []:  # end of the game
             if any(c.color == 'Tarot' and c.valeur == 1 for c in self.hand.cards): # petit au bout
-                self.petit_au_bout = self.team[joueur_gagnant]
+                self.petit_au_bout = self.team[self.hand.winner]
             self.next_state()
         if not just_scores:
             print(f"Hand cards: {self.hand.cards}")
-            print(f"Player {joueur_gagnant.name} wins the hand.\n")
+            print(f"Player {self.hand.winner} wins the hand.\n")
 
         if any(c.color == 'Tarot' and c.valeur == 0 for c in self.hand.cards) and (self.players[0].cards != [] or self.chelem) :
             excuse_player_index = next(i for i, c in enumerate(self.hand.cards) if c.color == 'Tarot' and c.valeur == 0)
             excuse_player = self.players[(excuse_player_index + self.player_turn) % self.nb_players]
-            if self.team[joueur_gagnant] != self.team[excuse_player]:
+            if self.team[self.hand.winner] != self.team[excuse_player]:
                 print("le joueur qui a joué l'excuse n'est pas dans la même équipe que le joueur gagnant")
                 print("il donne une carte à l'équipe adverse pour récupérer l'excuse")
                 self.points[self.team[excuse_player]] += 4
@@ -416,10 +449,10 @@ class Round:
             p = sum(c.nb_points for c in self.hand.cards)
         
         bouts = [c for c in self.hand.cards if c.color == 'Tarot' and c.valeur in (1, 21, 0)]
-        self.bouts[self.team[joueur_gagnant]] += len(bouts)
-        self.points[self.team[joueur_gagnant]] += p
+        self.bouts[self.team[self.hand.winner]] += len(bouts)
+        self.points[self.team[self.hand.winner]] += p
 
-        self.player_turn = self.players.index(joueur_gagnant) # Update the player turn
+        self.player_turn = self.players.index(self.hand.winner) # Update the player turn
 
         self.deck.add_hand(self.hand) # Add the hand to the deck of the next round
 
@@ -475,7 +508,7 @@ class Party:
         self.round = Round(round_players, self.deck)
 
     def get_cards(self):
-        for nompng in listdir('Image/Cards-png'):
+        for nompng in listdir('static/Cards-png'):
             nom = nompng[:-4]
             if nom != 'CardBacks':
                 self.cards.append(Card(nom))

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Jeu de Tarot en Ligne</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Chargement de Socket.IO depuis CDN -->
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</head>
+<body>
+    <h1>Jeu de Tarot en Ligne</h1>
+    <div id="players">Joueurs connectés: (en attente...)</div>
+    <div id="status"></div>
+    <div id="current-hand"><h3>Pli en cours</h3></div>
+    <div id="hand"></div>
+    <div id="controls"></div>
+
+    <!-- Zone de débogage -->
+    <div id="debug" style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc; max-height: 300px; overflow-y: auto;">
+        <h3>Messages de débogage:</h3>
+        <div id="debug-messages"></div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+#players, #status {
+    margin: 10px;
+    font-weight: bold;
+}
+
+.card {
+    margin: 5px;
+    width: 100px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.card:hover {
+    transform: scale(1.05);
+}
+
+.card.selected {
+    border: 3px solid red;
+}
+
+#controls {
+    margin: 20px;
+}
+
+#chien {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f9f9f9;
+    border: 2px dashed #aaa;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+
+#current-hand {
+    display: none; /* ← caché initialement */
+    margin-top: 20px;
+    padding: 10px;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    background-color: #f3f3f3;
+}
+
+#current-hand.visible {
+    display: flex;
+}
+
+#current-hand h3 {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+}
