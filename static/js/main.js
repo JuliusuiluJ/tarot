@@ -178,6 +178,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		}));
 	});
 
+	socket.on('discard_done', () => {
+		showControls([]); 
+		$('status').innerText = "Écart validé, début du jeu !";
+	});
+
 	socket.on('start_game_phase', () => $('current-hand').classList.add('visible'));
 
 	socket.on('ask_play', () => {

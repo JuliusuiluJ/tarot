@@ -113,6 +113,7 @@ def proceed_after_announce(player, announce):
         send_update_hand(taker)
         emit_to_player(taker, 'ask_discard', {'num': len(chien)})
     else:
+        broadcast('start_game_phase')
         ask_play_current()
 
 def ask_play_current():
@@ -159,8 +160,6 @@ def on_announce(data):
     if player:
         announce = data['announce']
         chelem = data.get('chelem', False)
-        
-        # Mettre à jour le chelem si nécessaire
         if chelem:
             party.round.chelem = True
             
@@ -194,8 +193,8 @@ def on_discard(data):
         broadcast('status', f"{player.name} a écarté ses cartes")
         broadcast('hide_chien')
         broadcast('start_game_phase')
-        emit_to_player(player, 'discard_done')
         send_update_hand(player)
+        emit_to_player(player, 'discard_done')
         ask_play_current()
 
 @socketio.on('play_card')
