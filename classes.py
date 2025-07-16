@@ -85,6 +85,13 @@ class Hand:
 
     def valid(self, joueur: Player, Carte: Card, printing=True):
 
+        if Carte.color == 'Tarot' and Carte.valeur == 0: # Fool can be played anytime
+            return True
+        if not self.cards:
+            return True # 1st Card
+        if len(self.cards) == 1 and self.cards[-1].valeur == 0:
+            return True  # Fool
+        
         if Carte.color == 'Tarot': # Règle de montée à l'atout
             atouts_player = [c for c in joueur.cards if c.color == 'Tarot' and c.valeur != 0]
             atouts_hand = [c for c in self.cards if c.color == 'Tarot' and c.valeur != 0]
@@ -94,19 +101,11 @@ class Hand:
                 if highest_atout_player.valeur > highest_atout_hand.valeur and Carte.valeur < highest_atout_hand.valeur:
                     if printing:
                         print(f"You must play a higher Tarot card than {highest_atout_player} if you have one.")
-                        print(self.cards)
-                        print(joueur.cards)
                     return False
                 
-        if not self.cards:
-            return True # 1st Card
-        if len(self.cards) == 1 and self.cards[-1].valeur == 0:
-            return True  # Fool
         hand_color = self.cards[0].color
         if Carte.color == hand_color:
             return True  # same color
-        if Carte.color == 'Tarot' and Carte.valeur == 0: # Fool can be played anytime
-            return True
         for c in joueur.cards:
             if c.color == hand_color:
                 if printing:
